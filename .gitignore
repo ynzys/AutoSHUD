@@ -13,3 +13,6 @@ back*.R
 bak*.R
 *.R.bak
 *.swp
+
+# SHUD source code (cloned from GitHub)
+shud_src/
