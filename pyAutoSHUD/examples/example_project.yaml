@@ -1,0 +1,95 @@
+# pyAutoSHUD Example Project Configuration
+# This is an example configuration for a small watershed
+
+project:
+  name: "ExampleWatershed"
+  start_year: 2017
+  end_year: 2018
+  output_dir: "./output/example"
+
+data:
+  # Required input data
+  dem: "data/example/elevation.tif"
+  watershed_boundary: "data/example/wbd.shp"
+  stream_network: "data/example/stm.shp"
+
+  # Optional lake data
+  lake: null
+
+  # Soil data configuration
+  soil:
+    source: "isric"  # ISRIC SoilGrids (global)
+    data_dir: "/data/soil/ISRIC_SoilGrids"
+
+  # Land cover configuration
+  landcover:
+    source: "glc"  # USGS Global Land Cover
+    file: "/data/landcover/GLC/LCType.tif"
+
+  # Meteorological forcing data
+  forcing:
+    source: "gldas"  # GLDAS v2.1
+    data_dir: "/data/forcing/GLDAS"
+    output_dir: "./output/example/forcing"
+
+model:
+  # Mesh generation parameters
+  num_cells: 500  # Target number of cells
+  max_area_km2: 5.0  # Maximum element area in km²
+  min_angle: 31.0  # Minimum angle for Delaunay triangulation
+
+  # Hydrological parameters
+  aquifer_depth: 15.0  # Aquifer depth in meters
+  buffer_distance: 3000.0  # Buffer distance for data extraction (meters)
+
+  # Quick mode (for testing)
+  quick_mode: false
+
+  # River parameters (optional - auto-calculated if not specified)
+  # river_width: null
+  # river_depth: null
+
+simulation:
+  start_day: 0
+  end_day: null  # Auto-calculated from years if null
+  solver_step: 2  # ODE solver maximum step (minutes)
+  cryosphere: false  # Enable snow/ice processes
+
+# Optional: Calibration configuration
+calibration:
+  enabled: false
+  algorithm: "NSGA2"
+  iterations: 50
+  population_size: 30
+
+  objectives:
+    - "NSE"
+    - "RMSE"
+
+  observed_data: "data/example/observed_discharge.csv"
+
+  parameters:
+    - name: "GEOL_KSATH"
+      min: 0.1
+      max: 10.0
+      initial: 1.0
+
+    - name: "GEOL_KSATV"
+      min: 0.1
+      max: 10.0
+      initial: 1.0
+
+    - name: "SOIL_KINF"
+      min: 0.001
+      max: 1.0
+      initial: 0.01
+
+    - name: "RIV_ROUGH"
+      min: 0.01
+      max: 0.5
+      initial: 0.1
+
+    - name: "LC_ROUGH"
+      min: 0.5
+      max: 2.0
+      initial: 1.0
