@@ -1,0 +1,144 @@
+# Makefile.gpu
+# GPU-accelerated SHUD using CUDA
+# -----------------------------------------------------------------
+# Usage:
+#   make -f Makefile.gpu        # Build GPU version
+#   make -f Makefile.gpu clean  # Clean build files
+# -----------------------------------------------------------------
+
+# CUDA configuration
+CUDA_PATH ?= /usr/local/cuda
+NVCC = $(CUDA_PATH)/bin/nvcc
+CUDA_ARCH = -arch=sm_70 -gencode arch=compute_70,code=sm_70 \
+            -gencode arch=compute_75,code=sm_75 \
+            -gencode arch=compute_80,code=sm_80 \
+            -gencode arch=compute_86,code=sm_86
+
+# SUNDIALS configuration (must be compiled with CUDA support)
+SUNDIALS_DIR = $(HOME)/sundials
+
+# Directories
+SHELL = /bin/sh
+BUILDDIR = .
+SRC_DIR = src
+GPU_DIR = $(SRC_DIR)/gpu
+
+# Compiler configuration
+CXX = g++
+CXXFLAGS = -O3 -g -std=c++14 -D_GPU_ENABLED
+NVCCFLAGS = -O3 -g -std=c++14 -D_GPU_ENABLED $(CUDA_ARCH)
+
+# Target executable
+TARGET_GPU = $(BUILDDIR)/shud_gpu
+
+# Source files
+SRC_CPP = $(SRC_DIR)/classes/*.cpp \
+          $(SRC_DIR)/ModelData/*.cpp \
+          $(SRC_DIR)/Model/*.cpp \
+          $(SRC_DIR)/Equations/*.cpp \
+          $(GPU_DIR)/Model_Data_GPU.cpp
+
+SRC_CUDA = $(GPU_DIR)/gpu_memory.cu \
+           $(GPU_DIR)/gpu_kernels.cu
+
+# Header files
+SRC_H = $(SRC_DIR)/classes/*.hpp \
+        $(SRC_DIR)/ModelData/*.hpp \
+        $(SRC_DIR)/Model/*.hpp \
+        $(SRC_DIR)/Equations/*.hpp \
+        $(GPU_DIR)/*.hpp \
+        $(GPU_DIR)/*.cuh
+
+# Main program
+MAIN_GPU = $(SRC_DIR)/main_gpu.cpp
+
+# Include paths
+INCLUDES = -I$(SUNDIALS_DIR)/include \
+           -I$(CUDA_PATH)/include \
+           -I$(SRC_DIR)/Model \
+           -I$(SRC_DIR)/ModelData \
+           -I$(SRC_DIR)/classes \
+           -I$(SRC_DIR)/Equations \
+           -I$(GPU_DIR)
+
+# Library paths
+LIBRARIES = -L$(SUNDIALS_DIR)/lib \
+            -L$(CUDA_PATH)/lib64
+
+# Linker flags
+LDFLAGS = -lm \
+          -lsundials_cvode \
+          -lsundials_nvecserial \
+          -lsundials_nveccuda \
+          -lcudart \
+          -lcublas \
+          -lcusparse
+
+RPATH = -Wl,-rpath,$(SUNDIALS_DIR)/lib \
+        -Wl,-rpath,$(CUDA_PATH)/lib64
+
+# Build rules
+all: $(TARGET_GPU)
+
+$(TARGET_GPU): $(SRC_CPP) $(SRC_CUDA) $(SRC_H) $(MAIN_GPU)
+	@echo "================================================================"
+	@echo "Building GPU-accelerated SHUD..."
+	@echo "================================================================"
+	@echo "Step 1: Compiling CUDA kernels..."
+	$(NVCC) $(NVCCFLAGS) $(INCLUDES) -c $(GPU_DIR)/gpu_memory.cu -o $(GPU_DIR)/gpu_memory.o
+	$(NVCC) $(NVCCFLAGS) $(INCLUDES) -c $(GPU_DIR)/gpu_kernels.cu -o $(GPU_DIR)/gpu_kernels.o
+	@echo "Step 2: Compiling C++ sources..."
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $(GPU_DIR)/Model_Data_GPU.cpp -o $(GPU_DIR)/Model_Data_GPU.o
+	@echo "Step 3: Linking..."
+	$(NVCC) $(NVCCFLAGS) $(INCLUDES) $(LIBRARIES) $(RPATH) \
+		$(GPU_DIR)/gpu_memory.o \
+		$(GPU_DIR)/gpu_kernels.o \
+		$(GPU_DIR)/Model_Data_GPU.o \
+		$(SRC_CPP) $(MAIN_GPU) \
+		$(LDFLAGS) -o $(TARGET_GPU)
+	@echo "================================================================"
+	@echo "Build complete: $(TARGET_GPU)"
+	@echo "================================================================"
+	@echo "Usage: ./shud_gpu <input_dir> <output_dir>"
+	@echo ""
+
+clean:
+	@echo "Cleaning GPU build files..."
+	rm -f $(GPU_DIR)/*.o
+	rm -f $(TARGET_GPU)
+	@echo "Clean complete"
+
+help:
+	@echo "GPU-accelerated SHUD Makefile"
+	@echo ""
+	@echo "Targets:"
+	@echo "  make -f Makefile.gpu          Build GPU version"
+	@echo "  make -f Makefile.gpu clean    Clean build files"
+	@echo "  make -f Makefile.gpu help     Show this help"
+	@echo ""
+	@echo "Requirements:"
+	@echo "  - CUDA Toolkit 11.0+"
+	@echo "  - SUNDIALS 6.0+ compiled with CUDA support"
+	@echo "  - NVIDIA GPU with Compute Capability 7.0+"
+	@echo ""
+	@echo "Configuration:"
+	@echo "  CUDA_PATH = $(CUDA_PATH)"
+	@echo "  SUNDIALS_DIR = $(SUNDIALS_DIR)"
+	@echo ""
+
+check:
+	@echo "Checking GPU environment..."
+	@which nvcc || echo "ERROR: nvcc not found. Install CUDA Toolkit."
+	@nvidia-smi || echo "ERROR: nvidia-smi not found. Install NVIDIA driver."
+	@ls $(SUNDIALS_DIR)/lib/libsundials_nveccuda.* || echo "ERROR: SUNDIALS CUDA support not found."
+	@echo "Check complete"
+
+info:
+	@echo "GPU System Information:"
+	@nvidia-smi --query-gpu=name,compute_cap,memory.total --format=csv
+	@echo ""
+	@echo "CUDA Version:"
+	@nvcc --version | grep release
+	@echo ""
+
+.PHONY: all clean help check info
